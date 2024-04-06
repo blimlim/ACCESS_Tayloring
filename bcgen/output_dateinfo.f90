@@ -1,5 +1,5 @@
 subroutine output_dateinfo (ncid, dateid, datesecid, timeid, iyr1out, &
-                            mon1out, iyrnout, monnout, monlen)
+                            mon1out, iyrnout, monnout, monlen, climbool)
    use prec
 
    implicit none
@@ -12,7 +12,8 @@ subroutine output_dateinfo (ncid, dateid, datesecid, timeid, iyr1out, &
    integer, intent(in) :: mon1out     ! start month written to output file (default mon1rd)
    integer, intent(in) :: iyrnout     ! end year written to output file (default iyrnrd)
    integer, intent(in) :: monnout     ! end month written to output file
-   integer, intent(in) :: monlen(12)  ! length of months
+   integer, intent(in) :: monlen(12,2)  ! length of months
+   logical, intent(in) :: climbool    ! True means climatology is written, False means time series
    
    integer :: date(1)                 ! array to please lf95
    integer :: datesec(1)              ! array to please lf95
@@ -20,10 +21,12 @@ subroutine output_dateinfo (ncid, dateid, datesecid, timeid, iyr1out, &
    integer :: mo                      ! month
    integer :: start(1)                ! initial value
    integer, parameter :: count(1) = 1 ! number of values to write to netcdf file
+   integer :: j                       ! for swapping between leap and nonleap years
 
    real(r8) :: time(1)                ! array to please lf95
    real(r8) :: prvrem                 ! remaining length of prv month
    real(r8) :: halfmo                 ! half the length of current month
+
    
    if (mon1out < 1 .or. mon1out > 12) then
       call err_exit ('output_dateinfo: mon1out must be between 1 and 12')
@@ -33,21 +36,31 @@ subroutine output_dateinfo (ncid, dateid, datesecid, timeid, iyr1out, &
       call err_exit ('output_dateinfo: monnout must be between 1 and 12')
    end if
 
+
    yr = iyr1out
    mo = mon1out
+
+
    start(1) = 0
    time(1)  = 0.
    prvrem   = 0.
    do while (yr < iyrnout .or. yr == iyrnout .and. mo <= monnout)
       start(1) = start(1) + 1
-      date(1) = yr*10000 + mo*100 + monlen(mo)/2 + 1
+      ! SW: Check for leap year, only for the timeseries file. I think the climatology 
+      ! should be written for a non leap year
+      j = 1
+      if ((((mod(yr,4) == 0) .and. (mod(yr,100) /= 0)) .or. (mod(yr,400) == 0)) .and. .not.(climbool)) then 
+         j = 2
+         Print *, 'leap year: ', yr
+      end if
+      date(1) = yr*10000 + mo*100 + monlen(mo,j)/2 + 1
 
       datesec(1) = 0
-      if (mod(monlen(mo), 2) /= 0) datesec(1) = 43200
+      if (mod(monlen(mo,j), 2) /= 0) datesec(1) = 43200
 
-      halfmo  = monlen(mo)/2 + datesec(1)/86400._r8       ! half of the current month length
+      halfmo  = monlen(mo,j)/2 + datesec(1)/86400._r8       ! half of the current month length
       time(1) = time(1) + prvrem + halfmo                 ! plus remaining half of prv month
-      prvrem  = monlen(mo) - halfmo                       ! set remainder for next iteration
+      prvrem  = monlen(mo,j) - halfmo                       ! set remainder for next iteration
       call wrap_nf_put_vara_int (ncid, dateid, start, count, date)
       call wrap_nf_put_vara_int (ncid, datesecid, start, count, datesec)
       call wrap_nf_put_vara_double (ncid, timeid, start, count, time)

@@ -400,8 +400,8 @@ subroutine bcgen (mon1, iyr1, monn, iyrn, mon1rd,                &
    real(r8) :: c(nmon)                  ! upper diagonal matrix coeffs (year-by-year)
    real(r8) :: ac(12)                   ! lower diagonal matrix coeffs (climatology)
    real(r8) :: cc(12)                   ! upper diagonal matrix coeffs (climatology)
-   real(r8) :: xlon(nlon,nlat)               ! longitudes on input file (between 0 and 360)
-   real(r8) :: xlat(nlon,nlat)               ! latitudes on input file (between -90 and 90)
+   real(r8) :: xlon(nlon)               ! longitudes on input file (between 0 and 360)
+   real(r8) :: xlat(nlat)               ! latitudes on input file (between -90 and 90)
 
    integer :: monlen(12,2)              ! length of months
 
@@ -466,8 +466,8 @@ subroutine bcgen (mon1, iyr1, monn, iyrn, mon1rd,                &
                    (/0.68, 0.46, 0.33, 0.26, 0.20, 0.17, 0.14, 0.11, 0.08, 0.05, 0.02, 0.00/)) ! correl
              
 ! *****************************************************************
-
-   monlen(2,2) = 28       ! JR for no leap year
+!  SW: comment out to try and get Gregorian
+!   monlen(2,2) = 28       ! JR for no leap year
 
 !
 ! Copy dimension vars from input to output
@@ -677,6 +677,7 @@ subroutine bcgen (mon1, iyr1, monn, iyrn, mon1rd,                &
 !         
          call finish (nlon, nlat, mon1, nmon, centmon, &
                       arr, j)
+         write(6,*) 'Got to line 681'
 !
 ! Write 1 latitude of pre- and post-time-diddled variable to output file.
 ! 
@@ -688,6 +689,7 @@ subroutine bcgen (mon1, iyr1, monn, iyrn, mon1rd,                &
 ! m indexes into output arrays with a buffer offset
 !
          m = (iyr1out - iyr1)*12 + (mon1out - mon1)
+         write(6,*) 'Got to line 691'
          do l=1,nmonout
             m = m + 1
             start(3) = l
@@ -717,11 +719,11 @@ subroutine bcgen (mon1, iyr1, monn, iyrn, mon1rd,                &
 22 continue     ! 1=ice 2=sst
 !
 ! Write model-readable date and datesec info to output files
-!
+! SW: pass in the whole monlen array, rather than just the first year
    call output_dateinfo (ncidclim, dateidclim, datesecidclim, timeidclim, 0, &
-                         1, 0, 12, monlen(1,1))
+                         1, 0, 12, monlen, .TRUE.)
    call output_dateinfo (ncidamip, dateidamip, datesecidamip, timeidamip, iyr1out, &
-                         mon1out, iyrnout, monnout, monlen(1,1))
+                         mon1out, iyrnout, monnout, monlen, .FALSE.)
 
    call wrap_nf_close (ncidclim)
    call wrap_nf_close (ncidamip)

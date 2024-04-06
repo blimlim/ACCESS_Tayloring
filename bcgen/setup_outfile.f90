@@ -46,11 +46,11 @@ subroutine setup_outfile (ncid, outfil, tag, dateid, datesecid, &
 !
 ! Dimension variables
 !
-   call wrap_nf_def_var (ncid, 'lon', NF_DOUBLE, 2, dimids, lonid)
+   call wrap_nf_def_var (ncid, 'lon', NF_DOUBLE, 1, dimids(1), lonid)
    call wrap_nf_put_att_text (ncid, lonid, 'long_name', 'longitude')
    call wrap_nf_put_att_text (ncid, lonid, 'units', 'degrees_east')
 
-   call wrap_nf_def_var (ncid, 'lat', NF_DOUBLE, 2, dimids, latid)
+   call wrap_nf_def_var (ncid, 'lat', NF_DOUBLE, 1, dimids(2), latid)
    call wrap_nf_put_att_text (ncid, latid, 'long_name', 'latitude')
    call wrap_nf_put_att_text (ncid, latid, 'units', 'degrees_north')
 
@@ -58,7 +58,7 @@ subroutine setup_outfile (ncid, outfil, tag, dateid, datesecid, &
    write(str,100) iyr1out, mon1out
 100 format('days since ',i4.4,'-',i2.2,'-01 00:00:00')
    call wrap_nf_put_att_text (ncid, timeid, 'units', trim(str))
-   call wrap_nf_put_att_text (ncid, timeid, 'calendar', '365_day')
+   call wrap_nf_put_att_text (ncid, timeid, 'calendar', 'gregorian')
 
    ! history attribute
    call wrap_nf_put_att_text (ncid, NF_GLOBAL, 'history', trim(history))

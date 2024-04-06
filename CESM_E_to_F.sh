@@ -1,5 +1,5 @@
 #####################################################################################
-# A script for making boundary files from E runs for F runs
+# A script for making boundary files for AMIP simulations with ACCESS ESM1.5
 # Modification regarding using other SST as inputs are instructed
 # Please make sure that the sea ice and SST have the same and standard resolution
 # The reference is here:
@@ -9,53 +9,123 @@
 #######################################################
 # Setting Parameters
 #######################################################
-export casename="E_pi"
 
-# directory of this file and icesst toolbox
-export dir_tool="/n/home10/dchan/icesst"
+# SW: Gadi specific - load the required modules
+module load intel-compiler/2021.8.0
+module load netcdf
+module load nco/5.0.5
+
+# directory of this file and the bcgen folder
+export dir_tool="/home/565/sw6175/prepping_forcings/CESM_BC"
 
 # directory of SST and seaice data
-export dir_data="/n/regal/huybers_lab/dchan/cesm_output/${casename}/ice/hist/"
+export dir_data="/g/data/w40/sw6175/diddling/SST_patterns/Regridded/combined"
 
-# directory of forcing files
-export dir_forcing="/n/home10/dchan/holy_kuang/cesm_output/CESM_input/atm/cam/sst/"
+# Directory for diddling output
+export dir_output="/g/data/w40/sw6175/diddling/SST_patterns/Diddled"
 
-export num_yr=60
-export num_yr_0=`expr $num_yr - 1`
-export num_mon=`expr $num_yr \* 12`
-export num_mon_0=`expr $num_yr \* 12 - 1`
-# Interval to take climatology. First year starts from 0.
-export yr_clim_st=0
-export yr_clim_ed=${num_yr_0}
+# Directory for temporary files
+export dir_temp="/g/data/w40/sw6175/diddling/SST_patterns/Temp"
+
+# Name of input file, asssumed to lie in dir_data
+export input_file="regridded_input4mips_combined_floattime.nc"
+
+
+
+# SPECIFY the first and last month and year for period in which observed 
+# monthly mean data will be read. (The first month read must not preceed mon1, 
+# iyr1, and the last month must not follow monn, iyrn).  
+
+export mon1rd=1
+export iyr1rd=1870
+
+export monnrd=12
+export iyrnrd=2016
+
+# SPECIFY first and last month and year for entire period that will
+# be treated (i.e., the period of interest plus buffers at ends).
+# Note that the entire period treated should be an integral   
+# number of years.  
+
+# Try adding a buffer of one year on either side
+export mon1=1
+export iyr1=1869
+export monn=12
+export iyrn=2017
+
+# SPECIFY the first and last month and year that will be included in
+# climatological mean.  (This must be an interval within the 
+# observed period).  
+
+# There is a note in the bcgen README saying that the climatology period 
+# should generally be left as 1982 - 2001. I'm not sure what 
+# would be best to do here, so I will leave it as this.
+export mon1clm=1
+export iyr1clm=1982
+export monnclm=12
+export iyrnclm=2001
+
+# export mon1clm=1
+# export iyr1clm=1870
+# export monnclm=3
+# export iyrnclm=2022
+
+# SPECIFY the first and last month and year written to the output 
+# file.  (Try to begin at east a few months after the mon1rd,
+# iyr1rd, and end a few months before monnrd, iyrnrd, to avoid
+# sensitivity to the artificial data outside the observed 
+# period.)  
+
+# SW: In bcgen.f90 it's recommended to exclude 2-3 months on either side
+# I will exclude first year, as TOGA script requires January start month
+export mon1out=1
+export iyr1out=1871
+export monnout=9
+export iyrnout=2016
+
+
+echo "Initial Checks"
+timeinfo=$(ncdump -h  "${dir_data}/$input_file"| grep "float time")
+if [ -z "$timeinfo" ]; 
+then 
+    echo 'Error: Please ensure time variable is named "time" and has type float'
+    exit 1
+fi 
 
 
 #######################################################
 # copy the target files into a working directory
 # Modify these lines for your requirements
 #######################################################
+echo "organising and renaming data"
+
 cd ${dir_data}
-mkdir sea_ice
-mv -i ${casename}.cice.h.004*.nc sea_ice/  
-mv -i ${casename}.cice.h.005*.nc sea_ice/ 
-mv -i ${casename}.cice.h.006*.nc sea_ice/  
-mv -i ${casename}.cice.h.007*.nc sea_ice/  
-mv -i ${casename}.cice.h.008*.nc sea_ice/  
-mv -i ${casename}.cice.h.009*.nc sea_ice/  
-cd sea_ice
+# I'm sort of assuming monnrd is december below with the end day: 
+# manually adjust last day of month if necessary
+
+ncks -d time,"${iyr1rd}-${mon1rd}-01 0:00:0.0","${iyrnrd}-${monnrd}-31 00:00:0.0" ${dir_data}/${input_file}  ${dir_temp}/start_file.nc
+
+cd ${dir_temp}
 
 #######################################################
-# Concatinate SST files
+# Make SST file
 #######################################################
-rm ice_cov.nc sst_cpl sst_cpl_inter sst_cpl.nc sst_cpl_sub
-ncrcat -v sst ${casename}.cice.h.*.nc temp.nc
-ncrename -v sst,SST_cpl temp.nc sst_cpl.nc
+# SW: they rename sst to SST_cpl
+cp start_file.nc temp.nc
+# SW: My sst variable is SST
+ncrename -v SST,SST_cpl temp.nc sst_cpl.nc
 rm temp.nc
 
 #######################################################
-# Concatinate aice files
+# Make sea ice file
 #######################################################
-ncrcat -v aice ${casename}.cice.h.*.nc temp.nc
-ncrename -v aice,ice_cov temp.nc temp2.nc
+cp start_file.nc temp.nc
+
+# SW: here they rename the ice variable
+# SW: my ice value is SEAICE
+ncrename -v SEAICE,ice_cov temp.nc temp2.nc
+
+# Convert sea ice percentage to fraction
 ncap2 -s 'ice_cov=ice_cov/100.' temp2.nc ice_cov.nc
 rm temp.nc temp2.nc
 
@@ -134,41 +204,6 @@ ncks -A -v ice_cov ice_cov_new2.nc sst_cpl_new2.nc
 cp sst_cpl_new2.nc ssticetemp.nc
 
 #######################################################
-# Modify the time
-#######################################################
-# The time variable will refer to the number of days at the end of each month,
-# counting from year 0, whereas the actual simulation began at year 1 (CESM default);
-# however, we want time values to be in the middle of each month,
-# referenced to the first year of the simulation (first time value equals 15.5);
-# extract (using ncks) time variable from existing amip sst file into working netcdf file.
-
-# A forcing file can be download from here:
-#                   https://svn-ccsm-inputdata.cgd.ucar.edu/trunk/inputdata/atm/
-
-# Note that the target file here is the HadISST AMIP forcing file
-# Please make sure that the data format are consistent in the two files
-# Other wise convert with ncap2 first
-
-# For first time users, leave these lines un-commented
-# cd ${dir_forcing}
-# ncap2  -s 'time=float(time)' sst_HadOIBl_bc_1x1_1850_2016_c170525.nc  sst_HadOIBl_bc_1x1_1850_2016_c170525_2.nc
-# cd -
-
-ncks -A -d time,0,${num_mon_0} -v time ${dir_forcing}sst_HadOIBl_bc_1x1_1850_2016_c170525_2.nc ssticetemp.nc
-
-# Add date variable: ncdump date variable from existing amip sst file;
-# modify first year to be year 0 instead of 1949
-# (do not including leading zeroes or it will interpret as octal)
-# and use correct number of months; ncgen to new netcdf file;
-# extract date (using ncks) and place in working netcdf file.
-
-# This is achived using the following matlab code
-matlab -nosplash -nodesktop -r "N=${num_yr};year=repmat([0:1:N-1],12,1);month=repmat([1:12]',1,N);day=repmat([16;15;repmat(16,10,1)],1,N);a=(year*10000+month*100+day);file=['${dir_data}','/sea_ice/ssticetemp.nc'];nccreate(file,'date','Dimensions',{'time',12*N},'Datatype','int32');ncwrite(file,'date',a(:));ncwriteatt(file,'date','long_name','current date (YYYYMMDD)');quit;">>log_snd
-
-# Add datesec variable: extract (using ncks) datesec (correct number of months) from existing amip sst file and place in working netcdf file.
-ncks -A -d time,0,${num_mon_0} -v datesec ${dir_forcing}sst_HadOIBl_bc_1x1_1850_2016_c170525_2.nc ssticetemp.nc
-
-#######################################################
 # At this point, you have an SST/ICE file in the correct format.
 # However, due to CAM's linear interpolation between mid-month values,
 # you need to apply a procedure to assure that the computed monthly means are consistent with the input data.
@@ -195,11 +230,30 @@ ncrename -v SST_cpl,SST -v ice_cov,ICEFRAC ssticetemp_new.nc
 # Modify namelist accordingly.
 cd ${dir_tool}
 cd bcgen
-sed -i "s/\( iyrn = \).*/\1${num_yr_0}/"             namelist
-sed -i "s/\( iyrnout = \).*/\1${num_yr_0}/"          namelist
-sed -i "s/\( iyrnrd = \).*/\1${num_yr_0}/"           namelist
-sed -i "s/\( iyr1clm = \).*/\1${yr_clim_st}/"        namelist
-sed -i "s/\( iyrnclm = \).*/\1${yr_clim_ed}/"        namelist
+
+sed -i "s/\( mon1rd = \).*/\1${mon1rd}/"                 namelist
+sed -i "s/\( iyr1rd = \).*/\1${iyr1rd}/"                 namelist
+sed -i "s/\( monnrd = \).*/\1${monnrd}/"                 namelist
+sed -i "s/\( iyrnrd = \).*/\1${iyrnrd}/"                 namelist
+
+sed -i "s/\( mon1 = \).*/\1${mon1}/"                     namelist
+sed -i "s/\( iyr1 = \).*/\1${iyr1}/"                     namelist
+sed -i "s/\( monn = \).*/\1${monn}/"                     namelist
+sed -i "s/\( iyrn = \).*/\1${iyrn}/"                     namelist
+
+sed -i "s/\( mon1clm = \).*/\1${mon1clm}/"               namelist
+sed -i "s/\( iyr1clm = \).*/\1${iyr1clm}/"               namelist
+sed -i "s/\( monnclm = \).*/\1${monnclm}/"               namelist
+sed -i "s/\( iyrnclm = \).*/\1${iyrnclm}/"               namelist
+
+sed -i "s/\( mon1out = \).*/\1${mon1out}/"               namelist
+sed -i "s/\( iyr1out = \).*/\1${iyr1out}/"                 namelist
+sed -i "s/\( monnout = \).*/\1${monnout}/"               namelist
+sed -i "s/\( iyrnout = \).*/\1${iyrnout}/"                 namelist
+
+
+
+echo "compiling"
 
 # Make bcgen and execute per instructions.
 gmake
@@ -208,9 +262,19 @@ gmake
 # file is the desired ICE/SST file.
 rm  ssticetemp_new.nc
 rm  *.nc
-ln -sf ${dir_data}/sea_ice/ssticetemp_new.nc .
-./bcgen -i ssticetemp_new.nc -c sstice_clim_${casename}.nc -t sstice_ts_${casename}.nc < namelist
+ln -sf ${dir_temp}/ssticetemp_new.nc .
+
+echo "running bcgen"
+
+./bcgen -i ssticetemp_new.nc -c sstice_clim.nc -t sstice_timeseries.nc < namelist
 
 # Place new SST/ICE file in desired location.
-cp -i sstice_clim_* ${dir_forcing}
-cp -i sstice_ts_* ${dir_forcing}
+cp -i sstice_clim.nc ${dir_output}
+cp -i sstice_timeseries.nc ${dir_output}
+
+# SW: remove the outputs from the bcgen directory
+rm sstice_clim.nc
+rm sstice_timeseries.nc
+
+# SW: empty the Temp directory
+rm ${dir_temp}/*
