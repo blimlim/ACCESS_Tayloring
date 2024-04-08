@@ -100,7 +100,7 @@ fi
 echo "organising and renaming data"
 
 cd ${dir_data}
-# I'm sort of assuming monnrd is december below with the end day: 
+# I'm assuming monnrd is december below with the end day: 
 # manually adjust last day of month if necessary
 
 ncks -d time,"${iyr1rd}-${mon1rd}-01 0:00:0.0","${iyrnrd}-${monnrd}-31 00:00:0.0" ${dir_data}/${input_file}  ${dir_temp}/start_file.nc
@@ -110,9 +110,9 @@ cd ${dir_temp}
 #######################################################
 # Make SST file
 #######################################################
-# SW: they rename sst to SST_cpl
+# Rename the SST variable to SST_cpl
 cp start_file.nc temp.nc
-# SW: My sst variable is SST
+
 ncrename -v SST,SST_cpl temp.nc sst_cpl.nc
 rm temp.nc
 
@@ -121,8 +121,7 @@ rm temp.nc
 #######################################################
 cp start_file.nc temp.nc
 
-# SW: here they rename the ice variable
-# SW: my ice value is SEAICE
+# Rename the sea ice variable to ice_cov
 ncrename -v SEAICE,ice_cov temp.nc temp2.nc
 
 # Convert sea ice percentage to fraction
@@ -215,12 +214,17 @@ cp sst_cpl_new2.nc ssticetemp.nc
 # 1. In driver.f90, sufficiently expand the lengths of variables prev_history and history
 #    (16384 should be sufficient); also comment out the test that the
 #    climate year be between 1982 and 2001 (lines 152-158).
+# ...
+# 4. Adjust Makefile to have proper path for LIB_NETCDF and INC_NETCDF.
+
+
+# SW: Steps 2 and 4 are not needed for ACCESS's cartesian grid, and so the following changes have been reverted:
 # 2. In bcgen.f90 and setup_outfile.f90, change the dimensions of xlon and xlat to (nlon,nlat);
 #    this is to accommodate use of non-cartesian ocean grid.
 # 3. In setup_outfile.f90, modify the 4th and 5th arguments in the calls to
 #    wrap_nf_def_var for lon and lat to be 2 and dimids;
 #    this is to accommodate use of non-cartesian ocean grid.
-# 4. Adjust Makefile to have proper path for LIB_NETCDF and INC_NETCDF.
+
 #######################################################
 
 # Rename SST_cpl to SST, and ice_cov to ICEFRAC in the current SST/ICE file:
